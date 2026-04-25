@@ -22,30 +22,34 @@ st.set_page_config(
 
 # ── Artifact paths ────────────────────────────────────────────────────────────
 MODEL_PATH = Path("model.joblib")
-SCALER_PATH = Path("scaler.joblib")
 FEATURES_PATH = Path("feature_columns.joblib")
-ENCODERS_PATH = Path("encoders.joblib")
+
+# ── Encoding maps (must match save_model.py exactly) ─────────────────────────
+HOME_PLANET_MAP = {"Earth": 0, "Europa": 1, "Mars": 2}
+DESTINATION_MAP = {"55 Cancri e": 0, "PSO J318.5-22": 1, "TRAPPIST-1e": 2}
+DECK_MAP = {"A": 0, "B": 1, "C": 2, "D": 3, "E": 4, "F": 5, "G": 6, "T": 7}
+SIDE_MAP = {"P": 0, "S": 1}
+
+FEATURE_COLS = [
+    "HomePlanet", "CryoSleep", "Destination", "Age", "VIP",
+    "RoomService", "FoodCourt", "ShoppingMall", "Spa", "VRDeck",
+    "deck", "side", "total_spent", "is_alone",
+]
 
 
 # ── Load model artifacts ──────────────────────────────────────────────────────
 @st.cache_resource
 def load_artifacts():
-    if not all(
-        p.exists() for p in [MODEL_PATH, SCALER_PATH, FEATURES_PATH, ENCODERS_PATH]
-    ):
-        return None, None, None, None
-    model = joblib.load(MODEL_PATH)
-    scaler = joblib.load(SCALER_PATH)
-    feature_columns = joblib.load(FEATURES_PATH)
-    encoders = joblib.load(ENCODERS_PATH)
-    return model, scaler, feature_columns, encoders
+    if not MODEL_PATH.exists() or not FEATURES_PATH.exists():
+        return None, None
+    return joblib.load(MODEL_PATH), joblib.load(FEATURES_PATH)
 
 
-model, scaler, feature_columns, encoders = load_artifacts()
+model, feature_columns = load_artifacts()
 
 if model is None:
     st.warning(
-        "Please run `python train_model.py` first to generate model files."
+        "Model dosyaları bulunamadı. Lütfen önce `python save_model.py` çalıştırın."
     )
     st.stop()
 
@@ -76,18 +80,19 @@ spa = st.sidebar.number_input("Spa", min_value=0, max_value=25000, value=0)
 vr_deck = st.sidebar.number_input("VRDeck", min_value=0, max_value=25000, value=0)
 deck = st.sidebar.selectbox("Deck", ["A", "B", "C", "D", "E", "F", "G", "T"])
 side = st.sidebar.selectbox("Side", ["P", "S"])
+is_alone = st.sidebar.selectbox("Traveling Alone?", ["No", "Yes"])
 
 predict_btn = st.sidebar.button("🔍 Predict", use_container_width=True)
 
 
 # ── Build feature row ─────────────────────────────────────────────────────────
 def build_input_df() -> pd.DataFrame:
-    total_spend = room_service + food_court + shopping_mall + spa + vr_deck
+    total_spent = room_service + food_court + shopping_mall + spa + vr_deck
 
     row: dict = {
-        "HomePlanet": home_planet,
+        "HomePlanet": HOME_PLANET_MAP[home_planet],
         "CryoSleep": 1 if cryo_sleep == "True" else 0,
-        "Destination": destination,
+        "Destination": DESTINATION_MAP[destination],
         "Age": float(age),
         "VIP": 1 if vip == "True" else 0,
         "RoomService": float(room_service),
@@ -95,24 +100,14 @@ def build_input_df() -> pd.DataFrame:
         "ShoppingMall": float(shopping_mall),
         "Spa": float(spa),
         "VRDeck": float(vr_deck),
-        "Deck": deck,
-        "Side": side,
-        "TotalSpend": float(total_spend),
+        "deck": DECK_MAP[deck],
+        "side": SIDE_MAP[side],
+        "total_spent": float(total_spent),
+        "is_alone": 1 if is_alone == "Yes" else 0,
     }
 
     df = pd.DataFrame([row])
-
-    # Encode categorical columns using loaded encoders
-    for col in ["HomePlanet", "Destination", "Deck", "Side"]:
-        le = encoders[col]
-        val = str(df[col].iloc[0])
-        if val not in le.classes_:
-            val = le.classes_[0]
-        df[col] = le.transform([val])[0]
-
-    df = df[feature_columns].astype(float)
-    df_scaled = scaler.transform(df)
-    return pd.DataFrame(df_scaled, columns=feature_columns)
+    return df[FEATURE_COLS].astype(float)
 
 
 # ── Prediction ────────────────────────────────────────────────────────────────
@@ -202,11 +197,9 @@ with st.expander("ℹ️ About"):
         to predict whether a given passenger was **transported** or **stayed on the ship**.
 
         **Techniques used:**
-        - KNN Imputation for missing numeric values
-        - Label Encoding for categorical features
-        - Feature engineering (TotalSpend, Cabin splitting)
-        - XGBoost / Gradient Boosting Classifier
-        - StandardScaler for feature normalization
+        - Feature engineering (total_spent, Cabin splitting, is_alone)
+        - Ordinal encoding for categorical features
+        - CatBoost Classifier
 
         **Data source:** [Kaggle – Spaceship Titanic](https://www.kaggle.com/competitions/spaceship-titanic)
         """
