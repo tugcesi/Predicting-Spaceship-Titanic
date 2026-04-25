@@ -206,7 +206,7 @@ with st.expander("ℹ️ About"):
         - Label Encoding for categorical features
         - Feature engineering (TotalSpend, Cabin splitting)
         - XGBoost / Gradient Boosting Classifier
-        - StandardScaler for feature normalisation
+        - StandardScaler for feature normalization
 
         **Data source:** [Kaggle – Spaceship Titanic](https://www.kaggle.com/competitions/spaceship-titanic)
         """

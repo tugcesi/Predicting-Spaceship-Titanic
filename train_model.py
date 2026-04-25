@@ -139,7 +139,6 @@ def main() -> None:
         )
     else:
         print("Training GradientBoostingClassifier (xgboost not available)...")
-        from sklearn.ensemble import GradientBoostingClassifier
         model = GradientBoostingClassifier(
             n_estimators=300,
             max_depth=5,
